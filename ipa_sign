@@ -65,8 +65,18 @@ if [[ ! ($INSPECT_ONLY == 1) ]]; then
     security cms -D -i "$PROVISION" > provision.plist
     echo "Embedding provision       '$(/usr/libexec/PlistBuddy -c "Print :Name" provision.plist)', which supports '$(/usr/libexec/PlistBuddy -c "Print :Entitlements:application-identifier" provision.plist)'"
     rm -rf Payload/*.app/_CodeSignature Payload/*.app/CodeResources
+    FULL_APP_ID=`/usr/libexec/PlistBuddy -c "Print :Entitlements:application-identifier" provision.plist`
+    APP_ID=$(echo $FULL_APP_ID | cut -d '.' -f 2-)
+    /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $APP_ID" Payload/*.app/Info.plist
+    codesign -d --entitlements :entitlements.plist Payload/*.app
+    /usr/libexec/PlistBuddy -c "Set :application-identifier $FULL_APP_ID" entitlements.plist
+    /usr/libexec/PlistBuddy -c "Delete :com.apple.developer.team-identifier" entitlements.plist
+    /usr/libexec/PlistBuddy -c "Set :get-task-allow false" entitlements.plist
+    /usr/libexec/PlistBuddy -c "Delete :keychain-access-groups:0" entitlements.plist
+    /usr/libexec/PlistBuddy -c "Add :keychain-access-groups:0 string $FULL_APP_ID" entitlements.plist
+    echo "Corrected entitlements for enabling keychain access."
     cp "$PROVISION" Payload/*.app/embedded.mobileprovision
-    /usr/bin/codesign -f -s "$CERTIFICATE" --resource-rules Payload/*.app/ResourceRules.plist Payload/*.app
+    /usr/bin/codesign -f -s "$CERTIFICATE" --entitlements entitlements.plist --resource-rules Payload/*.app/ResourceRules.plist Payload/*.app
     zip -qr "$IPA_NEW" Payload
 fi
 [[ $CLEANUP_TEMP -eq 1 ]] && rm -rf "$TMP"
